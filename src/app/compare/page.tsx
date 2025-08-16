@@ -14,7 +14,11 @@ function parseUsernames(text: string): string[] {
     const j = JSON.parse(text);
     if (Array.isArray(j)) {
       return j
-        .map((x) => (typeof x === "string" ? x : (x as any)?.username ?? (x as any)?.user ?? (x as any)?.name ?? ""))
+        .map((x) =>
+          typeof x === "string"
+            ? x
+            : (x as any)?.username ?? (x as any)?.user ?? (x as any)?.name ?? ""
+        )
         .filter(Boolean)
         .map(normalize);
     }
@@ -23,7 +27,9 @@ function parseUsernames(text: string): string[] {
   const lines = text.split(/\r?\n/).filter(Boolean);
   if (!lines.length) return [];
   const header = lines[0].split(/[;,\t]/).map((h) => h.trim().toLowerCase());
-  const idx = header.findIndex((h) => ["username", "user", "handle", "name"].includes(h));
+  const idx = header.findIndex((h) =>
+    ["username", "user", "handle", "name"].includes(h)
+  );
   if (idx >= 0) {
     return lines
       .slice(1)
@@ -35,6 +41,14 @@ function parseUsernames(text: string): string[] {
   return lines.map(normalize).filter(Boolean);
 }
 
+function duplicateCount(list: string[]) {
+  const seen = new Map<string, number>();
+  for (const u of list) seen.set(u, (seen.get(u) ?? 0) + 1);
+  let dups = 0;
+  for (const [, count] of seen) if (count > 1) dups += count - 1;
+  return dups;
+}
+
 export default function ComparePage() {
   const [oldText, setOldText] = useState("");
   const [newText, setNewText] = useState("");
@@ -43,38 +57,55 @@ export default function ComparePage() {
   const newList = useMemo(() => parseUsernames(newText), [newText]);
 
   const { unfollowed, newFollowers, unchanged } = useMemo(() => {
-    const A = new Set(oldList);
-    const B = new Set(newList);
+    const A = new Set(oldList);     //unique old followers
+    const B = new Set(newList);     //unique new followers
     return {
       unfollowed: [...A].filter((u) => !B.has(u)),
       newFollowers: [...B].filter((u) => !A.has(u)),
       unchanged: [...B].filter((u) => A.has(u)),
-    };
+    };  
   }, [oldList, newList]);
+
+  const oldDupes = useMemo(() => duplicateCount(oldList), [oldList]);
+  const newDupes = useMemo(() => duplicateCount(newList), [newList]);
 
   return (
     <main className="space-y-6">
       <h1 className="text-2xl font-semibold">Compare followers</h1>
-      <p className="text-slate-600">Paste two snapshots (old vs. new). Supports JSON, CSV, or one-per-line text.</p>
+      <p className="text-slate-600">
+        Paste two snapshots (old vs. new). Supports JSON, CSV, or one-per-line
+        text.
+      </p>
 
       <div className="grid md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-slate-700">Old snapshot</label>
+          <label className="block text-sm font-medium text-slate-700">
+            Old snapshot
+          </label>
           <textarea
             className="w-full min-h-[160px] rounded-lg border p-3"
             value={oldText}
             onChange={(e) => setOldText(e.target.value)}
             placeholder={`alice\nbob\ncarla`}
           />
+          <div className="text-xs text-slate-500">
+            Duplicates: <span className="font-medium">{oldDupes}</span>
+          </div>
         </div>
+
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-slate-700">New snapshot</label>
+          <label className="block text-sm font-medium text-slate-700">
+            New snapshot
+          </label>
           <textarea
             className="w-full min-h-[160px] rounded-lg border p-3"
             value={newText}
             onChange={(e) => setNewText(e.target.value)}
             placeholder={`alice\ncarla\nzoe`}
           />
+          <div className="text-xs text-slate-500">
+            Duplicates: <span className="font-medium">{newDupes}</span>
+          </div>
         </div>
       </div>
 
@@ -90,19 +121,25 @@ export default function ComparePage() {
         </button>
 
         <span className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
-          <span className="text-slate-500">Old:</span> <strong>{oldList.length}</strong>
+          <span className="text-slate-500">Old:</span>{" "}
+          <strong>{oldList.length}</strong>
         </span>
         <span className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
-          <span className="text-slate-500">New:</span> <strong>{newList.length}</strong>
+          <span className="text-slate-500">New:</span>{" "}
+          <strong>{newList.length}</strong>
         </span>
         <span className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
-          <span className="text-slate-500">Unchanged:</span> <strong>{unchanged.length}</strong>
+          <span className="text-slate-500">Unchanged:</span>{" "}
+          <strong>{unchanged.length}</strong>
         </span>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
         <List title={`Unfollowed (${unfollowed.length})`} items={unfollowed} />
-        <List title={`New followers (${newFollowers.length})`} items={newFollowers} />
+        <List
+          title={`New followers (${newFollowers.length})`}
+          items={newFollowers}
+        />
         <List title={`Unchanged (${unchanged.length})`} items={unchanged} />
       </div>
     </main>
